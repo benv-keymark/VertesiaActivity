@@ -295,22 +295,52 @@ namespace VertesiaActivity
 
             using (var doc = JsonDocument.Parse(body))
             {
-                if (doc.RootElement.TryGetProperty("result", out var resultsElement)
-                    && resultsElement.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var prop in resultsElement.EnumerateObject())
-                    {
-                        results[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
-                            ? prop.Value.GetString()
-                            : prop.Value.ToString();
-                    }
-                }
+                // The live Vertesia API returns "result" (lowercase); accept "Results" as fallback.
+                JsonElement resultsElement;
+                bool found = doc.RootElement.TryGetProperty("result", out resultsElement)
+                          || doc.RootElement.TryGetProperty("Results", out resultsElement);
+
+                if (found && resultsElement.ValueKind == JsonValueKind.Object)
+                    FlattenJsonElement(resultsElement, "", results);
             }
             Log.Debug($"Full results: {results}");
 
             return results;
         }
+        /// <summary>
+        /// Recursively flattens a <see cref="JsonElement"/> into <paramref name="target"/> using
+        /// dot-notation for nested objects and bracket-index notation for arrays.
+        /// Example keys produced: "invoice_number", "vendor.name", "line_items[0].description".
+        /// </summary>
+        private static void FlattenJsonElement(JsonElement element, string prefix, Dictionary<string, string> target)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        var key = string.IsNullOrEmpty(prefix) ? prop.Name : prefix + "." + prop.Name;
+                        FlattenJsonElement(prop.Value, key, target);
+                    }
+                    break;
 
+                case JsonValueKind.Array:
+                    int index = 0;
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        var key = prefix + "[" + index + "]";
+                        FlattenJsonElement(item, key, target);
+                        index++;
+                    }
+                    break;
+
+                default:
+                    target[prefix] = element.ValueKind == JsonValueKind.String
+                        ? element.GetString()
+                        : element.ToString();
+                    break;
+            }
+        }
         // -------------------------------------------------------------------------
         // Step 7 – Map results to child document custom values
         // -------------------------------------------------------------------------
