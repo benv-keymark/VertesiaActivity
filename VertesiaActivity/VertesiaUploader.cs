@@ -343,7 +343,7 @@ namespace VertesiaActivity
         {
             if (mapping == null || results == null)
                 return;
-
+            //Test of updates
             childDocument.Initialize("Death Certificate");
 
             foreach (var entry in mapping)
