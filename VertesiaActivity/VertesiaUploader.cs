@@ -22,7 +22,7 @@ namespace VertesiaActivity
     /// <summary>
     /// Uploads each child document to Vertesia, waits for processing to complete,
     /// executes a configured interaction, and maps the results back to the child
-    /// document as custom values.
+    /// document as index fields and/or table rows.
     ///
     /// Flow per child document:
     ///   1. POST https://sts.vertesia.io/token/issue  (ApiKey → JWT)
@@ -31,7 +31,8 @@ namespace VertesiaActivity
     ///   4. POST {ApiUrl}/objects                     (register object)
     ///   5. GET  {ApiUrl}/objects/{object_id}         (poll until status == "ready")
     ///   6. POST {ApiUrl}/interactions/{InteractionId}/execute  (→ Results JSON)
-    ///   7. Map Results fields → child document custom values via ResultMapping
+    ///   7. Map Results fields → child document index fields via ResultMapping
+    ///   8. Map Results arrays → child document tables via TableMapping
     /// </summary>
     public class VertesiaUploader : STGUnattendedAbstract<VertesiaUploaderSettings>
     {
@@ -75,34 +76,19 @@ namespace VertesiaActivity
                 return;
             }
 
-            // Build the file name: "<media name>.<extension>" where extension is the
-            // lowercased media type name (e.g. "pdf", "jpg").
-
-            //Testing hard coded file name and extension
             var extension = media.MediaType?.MediaTypeName?.ToLowerInvariant() ?? "bin";
             var baseName = string.IsNullOrWhiteSpace(media.Name) ? media.ID.ToString() : media.Name;
-            
-            //Testing FIle Name
             var mediaFileName = $"{baseName}.{extension}";
             Log.Debug($"File name is:{mediaFileName}");
-            //var mediaFileName = "7499447.pdf";
 
-            // Use the media type's MIME type (e.g. "application/pdf") for Content-Type
-            // headers and the upload-url request body.
-
-            //Testing Media Mime Type
             var mimeType = media.MediaType?.MediaTypeMimeType;
             Log.Debug($"Mime Type is: {mimeType}");
-                //            ?? $"application/{extension}";
-            //var mimeType = "application/pdf";
 
             var jwt = GetJwtToken(ActivityConfiguration.ApiKey);
             Log.Info($"JWT is: {jwt}");
 
-
             var uploadInfo = GetUploadUrl(jwt, ActivityConfiguration.ApiUrl, mediaFileName, mimeType);
             Log.Debug($"Got upload URL for object id: {uploadInfo.Id}");
-            
 
             if (media.MediaStream.CanSeek)
                 media.MediaStream.Seek(0, SeekOrigin.Begin);
@@ -125,10 +111,10 @@ namespace VertesiaActivity
             Log.Debug($"Object {objectId} is ready.");
 
             var results = ExecuteInteraction(jwt, ActivityConfiguration.ApiUrl, ActivityConfiguration.InteractionId, objectId);
-
             Log.Debug($"Interaction returned {results.Count} result field(s).");
 
             ApplyResultMapping(childDocument, results, ActivityConfiguration.ResultMapping);
+            ApplyTableMapping(childDocument, results, ActivityConfiguration.TableMapping);
         }
 
         // -------------------------------------------------------------------------
@@ -148,12 +134,6 @@ namespace VertesiaActivity
             var token = doc.RootElement.GetProperty("token").GetString();
             Log.Debug($"Got JWT token. Value is {token}");
             return token;
-
-
-
-
-
-
         }
 
         // -------------------------------------------------------------------------
@@ -163,9 +143,8 @@ namespace VertesiaActivity
         private UploadUrlResponse GetUploadUrl(string jwt, string apiUrl, string mediaFileName, string mimeType)
         {
             var url = apiUrl.TrimEnd('/') + "/objects/upload-url";
-            //I need to show the URL to ensure it's right
             Log.Error(url);
-            
+
             var body = JsonSerializer.Serialize(new { name = mediaFileName, mime_type = mimeType });
             Log.Debug($"Upload URL Body is: {body}");
 
@@ -174,7 +153,7 @@ namespace VertesiaActivity
             request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
             Log.Debug($"Request content is: {request.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
-            
+
             var response = _httpClient.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
 
@@ -268,7 +247,7 @@ namespace VertesiaActivity
         // Step 6 – Execute interaction
         // -------------------------------------------------------------------------
 
-        private Dictionary<string, string> ExecuteInteraction(string jwt, string apiUrl, string interactionId, string objectId)
+        internal Dictionary<string, string> ExecuteInteraction(string jwt, string apiUrl, string interactionId, string objectId)
         {
             var url = apiUrl.TrimEnd('/') + "/interactions/" + interactionId + "/execute";
             var requestBody = JsonSerializer.Serialize(new
@@ -282,14 +261,12 @@ namespace VertesiaActivity
             var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
             request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-            
 
             var response = _httpClient.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
 
             var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             Log.Debug($"Interaction response body: {body}");
-
 
             var results = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -307,6 +284,7 @@ namespace VertesiaActivity
 
             return results;
         }
+
         /// <summary>
         /// Recursively flattens a <see cref="JsonElement"/> into <paramref name="target"/> using
         /// dot-notation for nested objects and bracket-index notation for arrays.
@@ -341,31 +319,11 @@ namespace VertesiaActivity
                     break;
             }
         }
+
         // -------------------------------------------------------------------------
-        // Step 7 – Map results to child document custom values
+        // Step 7 – Map results to child document index fields
         // -------------------------------------------------------------------------
 
-        //internal void ApplyResultMapping(
-        //    STGDocument childDocument,
-        //    Dictionary<string, string> results,
-        //    SerializableDictionary<string, string> mapping)
-        //{
-        //    if (mapping == null || results == null)
-        //        return;
-
-        //    foreach (var entry in mapping)
-        //    {
-        //        if (results.TryGetValue(entry.Key, out var value))
-        //        {
-        //            childDocument.AddCustomValue(entry.Value, value, true);
-        //            Log.Debug($"Mapped '{entry.Key}' → '{entry.Value}': {value}");
-        //        }
-        //        else
-        //        {
-        //            Log.Warn($"Result field '{entry.Key}' not found; custom value '{entry.Value}' was not set.");
-        //        }
-        //    }
-        //}
         internal void ApplyResultMapping(
             STGDocument childDocument,
             Dictionary<string, string> results,
@@ -425,6 +383,104 @@ namespace VertesiaActivity
             }
         }
 
+        // -------------------------------------------------------------------------
+        // Step 8 – Map results arrays to child document tables
+        // -------------------------------------------------------------------------
+
+        internal void ApplyTableMapping(
+            STGDocument childDocument,
+            Dictionary<string, string> results,
+            SerializableDictionary<string, string> mapping)
+        {
+            if (mapping == null || mapping.Count == 0 || results == null)
+                return;
+
+            // Group entries by array prefix — the part of the key before the first '.'.
+            // e.g. key "line_items.description" → array prefix "line_items"
+            var groups = new Dictionary<string, List<KeyValuePair<string, string>>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in mapping)
+            {
+                var keyDot = entry.Key.IndexOf('.');
+                var valDot = entry.Value.IndexOf('.');
+
+                if (keyDot <= 0)
+                {
+                    Log.Warn($"Table mapping key '{entry.Key}' is not in 'array_prefix.field_name' format; skipping.");
+                    continue;
+                }
+                if (valDot <= 0)
+                {
+                    Log.Warn($"Table mapping value '{entry.Value}' is not in 'TableName.ColumnName' format; skipping.");
+                    continue;
+                }
+
+                var arrayPrefix = entry.Key.Substring(0, keyDot);
+                if (!groups.TryGetValue(arrayPrefix, out var list))
+                {
+                    list = new List<KeyValuePair<string, string>>();
+                    groups[arrayPrefix] = list;
+                }
+                list.Add(entry);
+            }
+
+            foreach (var group in groups)
+            {
+                var arrayPrefix = group.Key;
+                var entries = group.Value;
+
+                // Derive table name from the value prefix of the first entry.
+                var firstValDot = entries[0].Value.IndexOf('.');
+                var tableName = entries[0].Value.Substring(0, firstValDot);
+
+                // Build a lookup: column name → result field suffix within each array element.
+                // e.g. "Description" → "description"
+                var columnToField = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var tableDef = new STGTableDefinition(tableName);
+                foreach (var entry in entries)
+                {
+                    var keyDot = entry.Key.IndexOf('.');
+                    var valDot = entry.Value.IndexOf('.');
+                    var fieldSuffix = entry.Key.Substring(keyDot + 1);
+                    var columnName = entry.Value.Substring(valDot + 1);
+                    columnToField[columnName] = fieldSuffix;
+                    tableDef.AppendColumnDefinition(columnName, DtoSTGDataType.STGString);
+                }
+
+                var table = childDocument.AddDynamicTable(tableDef);
+
+                // Iterate array elements until no mapped field is found for that index.
+                for (int i = 0; ; i++)
+                {
+                    var indexPrefix = $"{arrayPrefix}[{i}]";
+
+                    bool anyFound = columnToField.Values.Any(f =>
+                        results.ContainsKey($"{indexPrefix}.{f}"));
+
+                    if (!anyFound)
+                        break;
+
+                    var row = table.InsertNewRow();
+                    foreach (var cell in row.Cells)
+                    {
+                        if (!columnToField.TryGetValue(cell.ColumnName, out var fieldSuffix))
+                            continue;
+
+                        var resultKey = $"{indexPrefix}.{fieldSuffix}";
+                        if (results.TryGetValue(resultKey, out var value))
+                        {
+                            cell.UnformattedValue = value;
+                            Log.Debug($"Mapped '{resultKey}' → '{tableName}.{cell.ColumnName}' (row {i}): {value}");
+                        }
+                        else
+                        {
+                            Log.Warn($"Result key '{resultKey}' not found; cell '{cell.ColumnName}' in row {i} was not set.");
+                        }
+                    }
+                }
+
+                Log.Debug($"Table '{tableName}' populated with {table.Rows.Count} row(s) from '{arrayPrefix}'.");
+            }
+        }
 
         // -------------------------------------------------------------------------
         // Response DTOs
