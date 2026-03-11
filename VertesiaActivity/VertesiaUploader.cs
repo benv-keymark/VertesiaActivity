@@ -453,7 +453,10 @@ namespace VertesiaActivity
                     tableDef.AppendColumnDefinition(columnName, DtoSTGDataType.STGString);
                 }
 
-                var table = childDocument.AddDynamicTable(tableDef);
+                var table = childDocument.Tables.FirstOrDefault(t => t.TableName.Equals(tableName, StringComparison.OrdinalIgnoreCase))
+            ?? childDocument.AddDynamicTable(tableDef);
+
+
 
                 // Iterate array elements until no mapped field is found for that index.
                 for (int i = 0; ; i++)
