@@ -7,6 +7,7 @@ using STG.RT.API.Document;
 using STG.RT.API.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -481,6 +482,7 @@ namespace VertesiaActivity
                         {
                             cell.SetCapturedValue(value);
                             cell.UnformattedValue = value;
+                            
                             //document.AssignFieldValueAsCapturedValue(cell, value);
                             Log.Debug($"Mapped '{resultKey}' → '{tableName}.{cell.ColumnName}' (row {i}): {value}");
                         }
@@ -490,9 +492,10 @@ namespace VertesiaActivity
                         }
                     }
                 }
-
+                childDocument.AssignFieldValueAsCapturedValue();
                 Log.Debug($"Table '{tableName}' populated with {table.Rows.Count} row(s) from '{arrayPrefix}'.");
             }
+            
         }
 
         // -------------------------------------------------------------------------
