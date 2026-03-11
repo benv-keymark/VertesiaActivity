@@ -15,6 +15,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
+using System.Xml.Linq;
 using VertesiaActivity.Settings;
 
 namespace VertesiaActivity
@@ -478,7 +479,9 @@ namespace VertesiaActivity
                         var resultKey = $"{indexPrefix}.{fieldSuffix}";
                         if (results.TryGetValue(resultKey, out var value))
                         {
+                            cell.SetCapturedValue(value);
                             cell.UnformattedValue = value;
+                            //document.AssignFieldValueAsCapturedValue(cell, value);
                             Log.Debug($"Mapped '{resultKey}' → '{tableName}.{cell.ColumnName}' (row {i}): {value}");
                         }
                         else
