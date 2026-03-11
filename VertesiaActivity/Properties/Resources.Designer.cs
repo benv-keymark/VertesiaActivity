@@ -167,5 +167,22 @@ namespace VertesiaActivity.Properties {
                 return ResourceManager.GetString("VertesiaUploaderSettings_TableMapping_Name", resourceCulture);
             }
         }
+        /// <summary>Additional Parameters</summary>
+        public static string VertesiaUploaderSettings_AdditionalParameters_Name
+        {
+            get
+            {
+                return ResourceManager.GetString("VertesiaUploaderSettings_AdditionalParameters_Name", resourceCulture);
+            }
+        }
+
+        /// <summary>Additional key/value pairs merged into the interaction request body's "data" object.</summary>
+        public static string VertesiaUploaderSettings_AdditionalParameters_Description
+        {
+            get
+            {
+                return ResourceManager.GetString("VertesiaUploaderSettings_AdditionalParameters_Description", resourceCulture);
+            }
+        }
     }
 }
