@@ -492,7 +492,7 @@ namespace VertesiaActivity
                         }
                     }
                 }
-                childDocument.AssignFieldValueAsCapturedValue();
+                //childDocument.AssignFieldValueAsCapturedValue();
                 Log.Debug($"Table '{tableName}' populated with {table.Rows.Count} row(s) from '{arrayPrefix}'.");
             }
             
