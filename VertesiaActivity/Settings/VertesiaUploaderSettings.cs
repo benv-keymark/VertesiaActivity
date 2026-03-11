@@ -76,5 +76,7 @@ namespace VertesiaActivity.Settings
             ResourceType = typeof(Resources))]
         [InputType(InputType.dictionary)]
         public SerializableDictionary<string, string> TableMapping { get; set; }
+        [InputType(InputType.dictionary)]
+        public SerializableDictionary<string, string> AdditionalParameters { get; set; }
     }
 }

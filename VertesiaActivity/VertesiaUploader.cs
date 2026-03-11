@@ -110,7 +110,7 @@ namespace VertesiaActivity
             WaitForObjectReady(jwt, ActivityConfiguration.ApiUrl, objectId);
             Log.Debug($"Object {objectId} is ready.");
 
-            var results = ExecuteInteraction(jwt, ActivityConfiguration.ApiUrl, ActivityConfiguration.InteractionId, objectId);
+            var results = ExecuteInteraction(jwt, ActivityConfiguration.ApiUrl, ActivityConfiguration.InteractionId, objectId, ActivityConfiguration.AdditionalParameters);
             Log.Debug($"Interaction returned {results.Count} result field(s).");
 
             ApplyResultMapping(childDocument, results, ActivityConfiguration.ResultMapping);
@@ -247,20 +247,27 @@ namespace VertesiaActivity
         // Step 6 – Execute interaction
         // -------------------------------------------------------------------------
 
-        internal Dictionary<string, string> ExecuteInteraction(string jwt, string apiUrl, string interactionId, string objectId)
+        internal Dictionary<string, string> ExecuteInteraction(
+    string jwt,
+    string apiUrl,
+    string interactionId,
+    string objectId,
+    IDictionary<string, string> additionalParameters = null)
         {
             var url = apiUrl.TrimEnd('/') + "/interactions/" + interactionId + "/execute";
-            var requestBody = JsonSerializer.Serialize(new
-            {
-                data = new
-                {
-                    document = "store:" + objectId
-                }
-            });
+
+            var dataDict = new Dictionary<string, object> { ["document"] = "store:" + objectId };
+            if (additionalParameters != null)
+                foreach (var kv in additionalParameters)
+                    dataDict[kv.Key] = kv.Value;
+
+            var requestBody = JsonSerializer.Serialize(new Dictionary<string, object> { ["data"] = dataDict });
 
             var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
             request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+
+
 
             var response = _httpClient.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
