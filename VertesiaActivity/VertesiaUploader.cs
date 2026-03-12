@@ -480,9 +480,11 @@ namespace VertesiaActivity
                         var resultKey = $"{indexPrefix}.{fieldSuffix}";
                         if (results.TryGetValue(resultKey, out var value))
                         {
+                            cell.CellValue.SetText(value);
                             cell.SetCapturedValue(value);
                             cell.UnformattedValue = value;
                             
+
                             //document.AssignFieldValueAsCapturedValue(cell, value);
                             Log.Debug($"Mapped '{resultKey}' → '{tableName}.{cell.ColumnName}' (row {i}): {value}");
                         }
