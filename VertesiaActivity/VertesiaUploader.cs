@@ -44,7 +44,7 @@ namespace VertesiaActivity
         private const string TokenIssueUrl = "https://sts.vertesia.io/token/issue";
         private const string ReadyStatus = "ready";
         private const int PollIntervalMs = 5000;
-        private const int MaxPollAttempts = 60;
+        private const int MaxPollAttempts = 180;
 
         private readonly HttpClient _httpClient;
 
@@ -61,7 +61,7 @@ namespace VertesiaActivity
         {
             foreach (var childDocument in document.ChildDocuments)
             {
-                ProcessChildDocument(childDocument);
+                ProcessChildDocument(childDocument, document);
             }
         }
 
@@ -69,9 +69,11 @@ namespace VertesiaActivity
         // Private pipeline
         // -------------------------------------------------------------------------
 
-        private void ProcessChildDocument(STGDocument childDocument)
+        private void ProcessChildDocument(STGDocument childDocument, STGDocument rootDocument)
         {
-            var media = childDocument.Media?.Count > 0 ? childDocument.Media[0] : null;
+            var media = childDocument.Media?.Count > 1
+                ? rootDocument.Media?.Count > 0 ? rootDocument.Media[0] : null
+                : childDocument.Media?.Count > 0 ? childDocument.Media[0] : null;
             if (media == null)
             {
                 Log.Warn($"Child document {childDocument.ID} has no media; skipping.");
