@@ -71,9 +71,10 @@ namespace VertesiaActivity
 
         private void ProcessChildDocument(STGDocument childDocument, STGDocument rootDocument)
         {
-            var media = childDocument.Media?.Count > 1
-                ? rootDocument.Media?.Count > 0 ? rootDocument.Media[0] : null
-                : childDocument.Media?.Count > 0 ? childDocument.Media[0] : null;
+            var media = childDocument.Media?.FirstOrDefault(m =>
+        string.Equals(m.MediaType?.MediaTypeName, "pdf", StringComparison.OrdinalIgnoreCase))
+    ?? rootDocument.Media?.FirstOrDefault(m =>
+        string.Equals(m.MediaType?.MediaTypeName, "pdf", StringComparison.OrdinalIgnoreCase));
             if (media == null)
             {
                 Log.Warn($"Child document {childDocument.ID} has no media; skipping.");
